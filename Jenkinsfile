@@ -1,6 +1,10 @@
 pipeline {
-    agent any
-
+    agent {
+        docker {
+            image 'python:3.10-slim'
+            args '-u root:root' // optional, for root access
+        }
+    }
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
@@ -22,9 +26,9 @@ pipeline {
         stage('Setup Python Environment') {
             steps {
                 echo "Installing Python dependencies..."
-                sh 'python3 -m pip install --upgrade pip'
-                sh 'python3 -m pip install -r requirements.txt'
-                sh 'python3 -m pip install dvc[all] mlflow requests'
+                sh 'pip install --upgrade pip'
+                sh 'pip install -r requirements.txt'
+                sh 'pip install dvc[all] mlflow requests'
             }
         }
 
