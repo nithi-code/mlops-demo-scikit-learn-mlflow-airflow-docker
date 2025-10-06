@@ -1,0 +1,10 @@
+
+scikit-learn==1.7.2
+pandas==2.3.3
+mlflow
+dvc
+flask
+prometheus-client
+joblib
+gunicorn
+flasgger

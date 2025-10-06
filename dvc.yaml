@@ -1,0 +1,23 @@
+
+stages:
+  generate:
+    cmd: python src/generate_data.py
+    deps:
+      - src/generate_data.py
+    outs:
+      - data/raw/housing.csv
+  train:
+    cmd: python src/train.py
+    deps:
+      - src/train.py
+      - data/raw/housing.csv
+    outs:
+      - artifacts/model.joblib
+      - artifacts/metrics.json
+  evaluate:
+    cmd: python src/evaluate.py
+    deps:
+      - src/evaluate.py
+      - artifacts/model.joblib
+    outs:
+      - artifacts/eval.json

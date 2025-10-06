@@ -1,0 +1,70 @@
+services:
+  airflow:
+    image: apache/airflow:2.6.3
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__FERNET_KEY=ukFVBNBcN97a4WjO-ZEZVd51FVuXQlU42y7EYYqr-vc=
+    volumes:
+      - ./airflow_dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      airflow db init &&
+      airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin ||
+      echo 'User exists' &&
+      airflow webserver
+      "
+
+  mlflow:
+    build:
+      context: .
+      dockerfile: mlflow_server/Dockerfile
+    volumes:
+      - mlflow_artifacts:/mlflow_artifacts
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+
+  model-service:
+    build:
+      context: .
+      dockerfile: model_service/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+    depends_on:
+      - mlflow
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    ports:
+      - "8081:8080"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/dashboard.json:/tmp/dashboard.json
+
+volumes:
+  mlflow_artifacts:
+  jenkins_home:
+  grafana-storage:
+  model_artifacts:

@@ -1,0 +1,9 @@
+
+__pycache__/
+artifacts/
+.dvc/
+dvcstore/
+mlflow.db
+mlflow_artifacts/
+*.pyc
+.env
