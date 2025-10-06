@@ -142,9 +142,9 @@ The project uses the **Boston Housing dataset** (or a synthetic version generate
 
 1. Build and start all services:
 
-```bash
-docker-compose up -d --build
-```
+    ```bash
+    docker-compose up -d --build
+    ```
 
 2. Access services as listed above.
 3. Swagger UI for model API: `http://localhost:8000/apidocs`
