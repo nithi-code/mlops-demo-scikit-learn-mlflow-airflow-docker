@@ -41,17 +41,18 @@ services:
       - ./artifacts:/app/artifacts
     depends_on:
       - mlflow
-  
+
   jenkins:
-    image: jenkins/jenkins:lts
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
     ports:
       - "8081:8080"
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock   # <-- Mount Docker socket
-    environment:
-      - DOCKER_HOST=unix:///var/run/docker.sock   # <-- Use host Docker daemon
-    restart: unless-stopped
+    depends_on:
+      - mlflow
+      - model-service
 
   prometheus:
     image: prom/prometheus:latest

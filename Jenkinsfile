@@ -1,20 +1,15 @@
 pipeline {
-    agent {
-        docker {
-            image 'python:3.10-slim'
-            args '-u root:root' // optional, for root access
-        }
-    }
+    agent any
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
         MODEL_SERVICE_URL = "http://localhost:8000/predict"
         MLFLOW_TRACKING_URI = "http://localhost:5000"
+        VENV_PATH = "/opt/venv/bin"
+        PATH = "${VENV_PATH}:${env.PATH}"
     }
-
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -23,12 +18,12 @@ pipeline {
             }
         }
 
-        stage('Setup Python Environment') {
+        stage('Setup Environment') {
             steps {
                 echo "Installing Python dependencies..."
-                sh 'pip install --upgrade pip'
-                sh 'pip install -r requirements.txt'
-                sh 'pip install dvc[all] mlflow requests'
+                sh "${VENV_PATH}/pip install --upgrade pip"
+                sh "${VENV_PATH}/pip install -r requirements.txt"
+                sh "${VENV_PATH}/pip install dvc[all] mlflow requests"
             }
         }
 
@@ -42,7 +37,7 @@ pipeline {
         stage('Train Model') {
             steps {
                 echo "Training the model..."
-                sh 'python3 src/train.py'
+                sh "${VENV_PATH}/python src/train.py"
             }
         }
 
@@ -76,7 +71,7 @@ pipeline {
 
                     // Optional: log prediction to MLflow
                     sh """
-                        python3 - <<EOF
+                        ${VENV_PATH}/python - <<EOF
 import mlflow
 import json
 mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")
@@ -93,15 +88,13 @@ EOF
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 script {
-                    // Validate Prometheus metrics
                     def prometheusResponse = sh(script: "curl -s http://localhost:9090/metrics", returnStdout: true).trim()
                     if (!prometheusResponse.contains("predict_requests_total")) {
                         error "Prometheus metrics missing 'predict_requests_total'!"
                     }
                     echo "Prometheus metrics validation passed."
 
-                    // Validate Grafana dashboard JSON endpoint
-                    def grafanaDashboardResponse = sh(script: "curl -s http://admin:admin@localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
+                    def grafanaDashboardResponse = sh(script: "curl -s http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
                     if (!grafanaDashboardResponse.contains("dashboard")) {
                         error "Grafana dashboard validation failed!"
                     }
@@ -109,7 +102,6 @@ EOF
                 }
             }
         }
-
     }
 
     post {
