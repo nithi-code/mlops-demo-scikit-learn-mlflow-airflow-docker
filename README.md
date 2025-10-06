@@ -154,6 +154,7 @@ The project uses the **Boston Housing dataset** (or a synthetic version generate
 * Train Model (Generates artifacts/model.joblib) - **docker-compose run --rm model-service python src/train.py**
 * Restart Model-Service - **docker-compose up -d --build model-service**
 * Log Check - **docker-compose logs -f model-service**
+* Jenkins Password generator - **docker exec -it mlops-demo-scikit-learn-mlflow-airflow-docker-jenkins-1 cat /var/jenkins_home/secrets/initialAdminPassword**
 
 ---
 
