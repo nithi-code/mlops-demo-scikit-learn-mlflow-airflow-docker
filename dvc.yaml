@@ -1,23 +1,26 @@
-
 stages:
-  generate:
-    cmd: python src/generate_data.py
+  prepare_data:
+    cmd: python src/prepare_data.py
     deps:
-      - src/generate_data.py
-    outs:
       - data/raw/housing.csv
+      - src/prepare_data.py
+    outs:
+      - data/processed/housing_processed.csv
+
   train:
     cmd: python src/train.py
     deps:
+      - data/processed/housing_processed.csv
       - src/train.py
-      - data/raw/housing.csv
     outs:
       - artifacts/model.joblib
       - artifacts/metrics.json
+
   evaluate:
     cmd: python src/evaluate.py
     deps:
-      - src/evaluate.py
       - artifacts/model.joblib
+      - data/processed/housing_processed.csv
+      - src/evaluate.py
     outs:
-      - artifacts/eval.json
+      - artifacts/evaluation.json

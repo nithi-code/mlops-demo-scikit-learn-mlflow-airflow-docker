@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   airflow:
     image: apache/airflow:2.6.3
@@ -13,8 +15,7 @@ services:
     command: >
       bash -c "
       airflow db init &&
-      airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin ||
-      echo 'User exists' &&
+      (airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || echo 'User exists') &&
       airflow webserver
       "
 
@@ -67,4 +68,4 @@ volumes:
   mlflow_artifacts:
   jenkins_home:
   grafana-storage:
-  model_artifacts:
+  artifacts:
