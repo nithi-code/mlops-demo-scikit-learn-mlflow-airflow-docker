@@ -1,19 +1,15 @@
 pipeline {
-    agent {
-        docker {
-            image 'python:3.10-slim'
-            args '-v /var/jenkins_home:/var/jenkins_home'
-        }
-    }
+    agent any
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
-        MODEL_SERVICE_URL = "http://model-service:8000/predict"
-        MLFLOW_TRACKING_URI = "http://mlflow:5000"
+        MODEL_SERVICE_URL = "http://localhost:8000/predict"
+        MLFLOW_TRACKING_URI = "http://localhost:5000"
     }
+
     stages {
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
                 git branch: 'main',
                 url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
@@ -23,10 +19,14 @@ pipeline {
 
         stage('Setup Environment') {
             steps {
-                echo "Installing Python dependencies..."
-                sh 'pip install --upgrade pip'
-                sh 'pip install -r requirements.txt'
-                sh 'pip install dvc[all] mlflow requests'
+                echo "Installing system and Python dependencies..."
+                sh '''
+                    apt-get update -y
+                    apt-get install -y python3 python3-pip curl
+                    pip3 install --upgrade pip
+                    pip3 install -r requirements.txt
+                    pip3 install dvc[all] mlflow requests
+                '''
             }
         }
 
@@ -40,7 +40,7 @@ pipeline {
         stage('Train Model') {
             steps {
                 echo "Training the model..."
-                sh 'python src/train.py'
+                sh 'python3 src/train.py'
             }
         }
 
@@ -56,22 +56,27 @@ pipeline {
             steps {
                 echo "Testing model prediction API..."
                 script {
-                    def payload = [[
-                        "feature_0": 0.496714, "feature_1": -0.138264, "feature_2": 0.647688,
-                        "feature_3": 1.52303, "feature_4": -0.234153, "feature_5": -0.234137,
-                        "feature_6": 1.57921, "feature_7": 0.767435
-                    ]]
+                    def payload = [
+                        [
+                            "feature_0": 0.496714,
+                            "feature_1": -0.138264,
+                            "feature_2": 0.647688,
+                            "feature_3": 1.52303,
+                            "feature_4": -0.234153,
+                            "feature_5": -0.234137,
+                            "feature_6": 1.57921,
+                            "feature_7": 0.767435
+                        ]
+                    ]
                     def payloadJson = groovy.json.JsonOutput.toJson(payload)
-                    def response = sh(
-                        script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}",
-                        returnStdout: true
-                    ).trim()
+                    def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}", returnStdout: true).trim()
                     echo "Prediction response: ${response}"
 
-                    // Log prediction to MLflow
+                    // Optional: log prediction to MLflow
                     sh """
-                    python - <<EOF
-import mlflow, json
+                        python3 - <<EOF
+import mlflow
+import json
 mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")
 with mlflow.start_run(run_name="test_prediction"):
     mlflow.log_param("input_sample", '${payloadJson}')
@@ -86,16 +91,16 @@ EOF
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 script {
-                    // Prometheus
+                    // Validate Prometheus metrics
                     def prometheusResponse = sh(script: "curl -s http://localhost:9090/metrics", returnStdout: true).trim()
                     if (!prometheusResponse.contains("predict_requests_total")) {
                         error "Prometheus metrics missing 'predict_requests_total'!"
                     }
                     echo "Prometheus metrics validation passed."
 
-                    // Grafana
-                    def grafanaResponse = sh(script: "curl -s -u admin:admin http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
-                    if (!grafanaResponse.contains("dashboard")) {
+                    // Validate Grafana dashboard JSON endpoint
+                    def grafanaDashboardResponse = sh(script: "curl -s http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
+                    if (!grafanaDashboardResponse.contains("dashboard")) {
                         error "Grafana dashboard validation failed!"
                     }
                     echo "Grafana dashboard validation passed."
