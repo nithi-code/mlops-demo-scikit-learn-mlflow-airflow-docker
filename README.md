@@ -237,7 +237,7 @@ The project uses the **Boston Housing dataset** (or a synthetic version generate
 - `docker-compose.yml` — brings up Airflow, MLflow, Jenkins, Prometheus, Grafana, Model service
 - `src/` — training & evaluation scripts
 - `airflow_dags/train_dag.py` — DAG to orchestrate training
-- `mlflow_server/` — Dockerfile to run MLflow tracking server.
+- `mlflow_server/` — Dockerfile to run MLflow tracking server
 - `model_service/` — Flask app to serve model predictions and expose Prometheus metrics
 - `dvc.yaml` — DVC pipeline referencing stages (preprocess, train, evaluate)
 
