@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'python:3.10-slim'
-            args '-u root:root'
-        }
-    }
+    agent any
 
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
@@ -15,7 +10,8 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Code') {
+
+        stage('Checkout') {
             steps {
                 git branch: 'main',
                     url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
@@ -23,14 +19,12 @@ pipeline {
             }
         }
 
-        stage('Setup Environment') {
+        stage('Setup Python Environment') {
             steps {
-                echo "Installing dependencies..."
-                sh '''
-                    pip install --upgrade pip
-                    pip install -r requirements.txt
-                    pip install dvc[all] mlflow requests
-                '''
+                echo "Installing Python dependencies..."
+                sh 'python3 -m pip install --upgrade pip'
+                sh 'python3 -m pip install -r requirements.txt'
+                sh 'python3 -m pip install dvc[all] mlflow requests'
             }
         }
 
@@ -44,7 +38,7 @@ pipeline {
         stage('Train Model') {
             steps {
                 echo "Training the model..."
-                sh 'python src/train.py'
+                sh 'python3 src/train.py'
             }
         }
 
@@ -76,9 +70,11 @@ pipeline {
                     def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}", returnStdout: true).trim()
                     echo "Prediction response: ${response}"
 
+                    // Optional: log prediction to MLflow
                     sh """
-                        python - <<EOF
-import mlflow, json
+                        python3 - <<EOF
+import mlflow
+import json
 mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")
 with mlflow.start_run(run_name="test_prediction"):
     mlflow.log_param("input_sample", '${payloadJson}')
@@ -93,13 +89,15 @@ EOF
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 script {
+                    // Validate Prometheus metrics
                     def prometheusResponse = sh(script: "curl -s http://localhost:9090/metrics", returnStdout: true).trim()
                     if (!prometheusResponse.contains("predict_requests_total")) {
                         error "Prometheus metrics missing 'predict_requests_total'!"
                     }
                     echo "Prometheus metrics validation passed."
 
-                    def grafanaDashboardResponse = sh(script: "curl -s http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
+                    // Validate Grafana dashboard JSON endpoint
+                    def grafanaDashboardResponse = sh(script: "curl -s http://admin:admin@localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
                     if (!grafanaDashboardResponse.contains("dashboard")) {
                         error "Grafana dashboard validation failed!"
                     }
@@ -107,10 +105,15 @@ EOF
                 }
             }
         }
+
     }
 
     post {
-        success { echo "Pipeline completed successfully!" }
-        failure { echo "Pipeline failed. Check logs for details." }
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check logs for details."
+        }
     }
 }
