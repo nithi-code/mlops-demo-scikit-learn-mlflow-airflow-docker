@@ -10,7 +10,7 @@ from datetime import datetime
 os.makedirs("artifacts", exist_ok=True)
 
 data = pd.read_csv("data/raw/housing.csv")
-X = data.drop(columns=["target"])
+X = data.drop("target", axis=1)
 y = data["target"]
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42, test_size=0.2)
