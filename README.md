@@ -155,6 +155,7 @@ docker-compose up -d --build
 * Restart Model-Service - **docker-compose up -d --build model-service**
 * Log Check - **docker-compose logs -f model-service**
 
+---
 
 ## DVC Explanation
 
@@ -165,7 +166,7 @@ docker-compose up -d --build
 
 2. Train Stage
 
-    * Takes processed data, trains the RandomForestRegressor, and outputs:
+    * Takes processed data, trains the RandomForestRegressor, saves model.joblib, logs metrics/artifacts to MLflow and outputs:
 
         **artifacts/model.joblib → trained model**
         **artifacts/metrics.json → training metrics (MSE, R2)**
@@ -174,6 +175,16 @@ docker-compose up -d --build
 
     * Uses the trained model to evaluate performance on test/validation data.
     * Outputs evaluation results in artifacts/evaluation.json.
+    * Reads metrics and optionally logs evaluation run to MLflow
+
+4. Key Points
+
+    * Every train.py run creates a new MLflow run with timestamped run names.
+    * Parameters, metrics, and the model artifact are logged.
+    * evaluate.py can optionally log metrics to MLflow as a separate evaluation run.
+    * Make sure your MLflow server (MLFLOW_TRACKING_URI) is running and accessible from the container.
+    * Every run is reproducible. dvc repro executes stages if inputs change
+    * MLflow runs are automatically linked because train.py logs artifacts and metrics.
 
     ## Steps to integrate DVC:
 
@@ -189,11 +200,38 @@ docker-compose up -d --build
     ```
  * This will track all dependencies, outputs, and allow you to reproduce the entire pipeline anytime.
 
+---
+
+## Jenkins automates the full workflow
+
+  After code push, Jenkins reproduces DVC pipeline → trains model → deploys services → validates API → logs results.
+
+  ## Stages:
+  1. **Checkout code** - 
+  2. **Reproduce DVC pipeline**
+  3. **Train model (via your train script)**
+  4. **Log metrics/artifacts to MLflow**
+  5. **Build and run Docker services**
+  6. **Test Model Prediction**  - Sends a sample JSON to your /predict endpoint.Captures the response from the model API. Stores the input sample and predicted value as metrics for tracking
+  7. **Validate Monitoring** - Queries Prometheus (http://localhost:9090/metrics) to check that predict_requests_total metric exists.Queries Grafana API to verify the dashboard JSON is present.Fails the pipeline if either check fails
+  7. Optionally clean up and notify
+
+ ### Notes
+  1. DVC Repro ensures any data preprocessing or intermediate files are updated.
+  2. Train Model runs your train.py script.
+  3. MLflow Logging stage assumes MLflow server is running; you can set MLFLOW_TRACKING_URI in Jenkins environment.
+  4. Docker Build & Up automatically builds and launches your services (model API, MLflow, Grafana, Prometheus, etc.).
+  5. Post stages handle success/failure notifications. You can extend them to email Slack notifications, etc.
+
+---
+
 ## Notes
 
 * Synthetic dataset is generated if `data/raw/housing.csv` is missing.
 * `artifacts/` contains `model.joblib` and `metrics.json`.
 * MLflow experiment `mlops-demo` is automatically created if it does not exist.
+
+---
 
 ## What files are important
 - `docker-compose.yml` — brings up Airflow, MLflow, Jenkins, Prometheus, Grafana, Model service

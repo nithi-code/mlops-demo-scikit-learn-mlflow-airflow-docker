@@ -1,26 +1,26 @@
 stages:
-  prepare_data:
-    cmd: python src/prepare_data.py
+  preprocess:
+    cmd: python src/preprocess.py
     deps:
+      - src/preprocess.py
       - data/raw/housing.csv
-      - src/prepare_data.py
     outs:
       - data/processed/housing_processed.csv
 
   train:
     cmd: python src/train.py
     deps:
-      - data/processed/housing_processed.csv
       - src/train.py
+      - data/processed/housing_processed.csv
     outs:
       - artifacts/model.joblib
       - artifacts/metrics.json
+    params:
+      - train.n_estimators
+      - train.max_depth
 
   evaluate:
     cmd: python src/evaluate.py
     deps:
-      - artifacts/model.joblib
-      - data/processed/housing_processed.csv
       - src/evaluate.py
-    outs:
-      - artifacts/evaluation.json
+      - artifacts/metrics.json

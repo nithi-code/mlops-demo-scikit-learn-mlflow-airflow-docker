@@ -1,40 +1,59 @@
-
-import mlflow
+import os
 import pandas as pd
-from sklearn.ensemble import RandomForestRegressor
+import joblib
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
-import joblib, os, json
+import json
+import mlflow
 from datetime import datetime
 
-os.makedirs("artifacts", exist_ok=True)
+# Paths
+PROCESSED_PATH = "data/processed/housing_processed.csv"
+MODEL_PATH = "artifacts/model.joblib"
+METRICS_PATH = "artifacts/metrics.json"
+os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
-data = pd.read_csv("data/raw/housing.csv")
+# MLflow setup
+MLFLOW_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+mlflow.set_tracking_uri(MLFLOW_URI)
+mlflow.set_experiment("mlops-demo")
+
+# Load data
+data = pd.read_csv(PROCESSED_PATH)
 X = data.drop("target", axis=1)
 y = data["target"]
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42, test_size=0.2)
+# Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-mlflow_uri = os.environ.get("MLFLOW_TRACKING_URI", "http://mlflow:5000")
-mlflow.set_tracking_uri(mlflow_uri)
-mlflow.set_experiment("mlops-demo")
+# Training parameters
+n_estimators = 50
+max_depth = 10
 
-with mlflow.start_run(run_name=f"run_{datetime.utcnow().isoformat()}") as run:
-    n_estimators = 50
-    max_depth = 10
-    mlflow.log_param("n_estimators", n_estimators)
-    mlflow.log_param("max_depth", max_depth)
+with mlflow.start_run(run_name=f"run_{datetime.utcnow().isoformat()}"):
+    # Train model
     model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
     model.fit(X_train, y_train)
+
+    # Predict and evaluate
     preds = model.predict(X_test)
     mse = mean_squared_error(y_test, preds)
     r2 = r2_score(y_test, preds)
+
+    # Save model locally
+    joblib.dump(model, MODEL_PATH)
+
+    # Save metrics locally
+    os.makedirs(os.path.dirname(METRICS_PATH), exist_ok=True)
+    with open(METRICS_PATH, "w") as f:
+        json.dump({"mse": mse, "r2": r2}, f)
+
+    # Log parameters, metrics, and model to MLflow
+    mlflow.log_param("n_estimators", n_estimators)
+    mlflow.log_param("max_depth", max_depth)
     mlflow.log_metric("mse", mse)
     mlflow.log_metric("r2", r2)
-    model_path = "artifacts/model.joblib"
-    joblib.dump(model, model_path)
-    mlflow.log_artifact(model_path, artifact_path="model")
-    # write metrics file
-    with open("artifacts/metrics.json", "w") as f:
-        json.dump({"mse": mse, "r2": r2}, f)
-    print("Training finished. MSE:", mse, "R2:", r2)
+    mlflow.log_artifact(MODEL_PATH, artifact_path="model")
+
+    print(f"[INFO] Training done. MSE={mse:.4f}, R2={r2:.4f}")
