@@ -1,5 +1,11 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'python:3.10-slim'
+            args '-u root:root'
+        }
+    }
+
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
@@ -12,20 +18,18 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
-                credentialsId: 'github-pat'
+                    url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
+                    credentialsId: 'github-pat'
             }
         }
 
         stage('Setup Environment') {
             steps {
-                echo "Installing system and Python dependencies..."
+                echo "Installing dependencies..."
                 sh '''
-                    apt-get update -y
-                    apt-get install -y python3 python3-pip curl
-                    pip3 install --upgrade pip
-                    pip3 install -r requirements.txt
-                    pip3 install dvc[all] mlflow requests
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                    pip install dvc[all] mlflow requests
                 '''
             }
         }
@@ -40,7 +44,7 @@ pipeline {
         stage('Train Model') {
             steps {
                 echo "Training the model..."
-                sh 'python3 src/train.py'
+                sh 'python src/train.py'
             }
         }
 
@@ -72,11 +76,9 @@ pipeline {
                     def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}", returnStdout: true).trim()
                     echo "Prediction response: ${response}"
 
-                    // Optional: log prediction to MLflow
                     sh """
-                        python3 - <<EOF
-import mlflow
-import json
+                        python - <<EOF
+import mlflow, json
 mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")
 with mlflow.start_run(run_name="test_prediction"):
     mlflow.log_param("input_sample", '${payloadJson}')
@@ -91,14 +93,12 @@ EOF
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 script {
-                    // Validate Prometheus metrics
                     def prometheusResponse = sh(script: "curl -s http://localhost:9090/metrics", returnStdout: true).trim()
                     if (!prometheusResponse.contains("predict_requests_total")) {
                         error "Prometheus metrics missing 'predict_requests_total'!"
                     }
                     echo "Prometheus metrics validation passed."
 
-                    // Validate Grafana dashboard JSON endpoint
                     def grafanaDashboardResponse = sh(script: "curl -s http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
                     if (!grafanaDashboardResponse.contains("dashboard")) {
                         error "Grafana dashboard validation failed!"
@@ -110,11 +110,7 @@ EOF
     }
 
     post {
-        success {
-            echo "Pipeline completed successfully!"
-        }
-        failure {
-            echo "Pipeline failed. Check logs for details."
-        }
+        success { echo "Pipeline completed successfully!" }
+        failure { echo "Pipeline failed. Check logs for details." }
     }
 }
