@@ -5,7 +5,7 @@ pipeline {
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
         MODEL_SERVICE_URL = "http://localhost:8000/predict"
-        MLFLOW_TRACKING_URI = "http://localhost:5000"
+        MLFLOW_TRACKING_URI = "http://mlflow:5000"
         VENV_PATH = "${WORKSPACE}/venv"
         PATH = "${VENV_PATH}/bin:${env.PATH}"
     }
@@ -30,10 +30,25 @@ pipeline {
             }
         }
 
-        stage('DVC Repro') {
+        stage('DVC Pull') {
             steps {
-                echo "Reproducing DVC pipeline..."
-                sh "${VENV_PATH}/bin/dvc repro || true"
+                echo "Pulling data from DVC..."
+                sh """
+                    mkdir -p ${DATA_DIR}/processed ${ARTIFACTS_DIR}
+                    ${VENV_PATH}/bin/dvc pull
+                """
+            }
+        }
+
+        stage('Wait for MLflow') {
+            steps {
+                echo "Waiting for MLflow Tracking Server..."
+                sh """
+                    until curl -s ${MLFLOW_TRACKING_URI}/api/2.0/mlflow/experiments/list >/dev/null; do
+                        echo "Waiting for MLflow..."
+                        sleep 5
+                    done
+                """
             }
         }
 
