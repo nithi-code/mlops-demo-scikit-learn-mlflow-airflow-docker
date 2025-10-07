@@ -209,13 +209,14 @@ The project uses the **Boston Housing dataset** (or a synthetic version generate
 
   ## Stages:
   1. **Checkout code** - 
-  2. **Reproduce DVC pipeline**
-  3. **Train model (via your train script)**
-  4. **Log metrics/artifacts to MLflow**
-  5. **Build and run Docker services**
-  6. **Test Model Prediction**  - Sends a sample JSON to your /predict endpoint.Captures the response from the model API. Stores the input sample and predicted value as metrics for tracking
-  7. **Validate Monitoring** - Queries Prometheus (http://localhost:9090/metrics) to check that predict_requests_total metric exists.Queries Grafana API to verify the dashboard JSON is present.Fails the pipeline if either check fails
-  7. Optionally clean up and notify
+  2. **Setup Python Environment**
+  3. **Prepare Data / DVC** - skips if no .dvc or remote configured. Prevents failures in Jenkins.
+  4. **Wait for MLflowt** - ensures train.py can connect
+  5. **Train model (via your train script)**
+  6. **Build & Deploy Docker Services**
+  7. **Test Model Prediction**  - Sends a sample JSON to your /predict endpoint.Captures the response from the model API. Stores the input sample and predicted value as metrics for tracking
+  8. **Validate Monitoring** - Queries Prometheus (http://localhost:9090/metrics) to check that predict_requests_total metric exists.Queries Grafana API to verify the dashboard JSON is present.Fails the pipeline if either check fails
+  9. Optionally clean up and notify
 
  ### Notes
   1. DVC Repro ensures any data preprocessing or intermediate files are updated.
