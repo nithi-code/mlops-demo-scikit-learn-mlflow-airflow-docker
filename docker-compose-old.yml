@@ -1,34 +1,25 @@
-version: "3.9"
-
 services:
   # -------------------------
   # 1. Apache Airflow
   # -------------------------
   airflow:
     image: apache/airflow:2.6.3
-    container_name: airflow-demo
     environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__FERNET_KEY=ukFVBNBcN97a4WjO-ZEZVd51FVuXQlU42y7EYYqr-vc=
+    container_name: airflow-demo
     volumes:
       - ./airflow_dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
     ports:
       - "8080:8080"
-    networks:
-      - mlops-network
     command: >
       bash -c "
       airflow db init &&
       (airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || echo 'User exists') &&
       airflow webserver
       "
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-      interval: 10s
-      retries: 10
-      timeout: 5s
 
   # -------------------------
   # 2. MLflow Tracking Server
@@ -46,11 +37,6 @@ services:
       - mlops-network
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5000/api/2.0/mlflow/experiments/list || exit 1"]
-      interval: 5s
-      retries: 12
-      timeout: 5s
 
   # -------------------------
   # 3. Model Service API
@@ -68,14 +54,9 @@ services:
     depends_on:
       - mlflow
     environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    - MLFLOW_TRACKING_URI=http://mlflow:5000
     networks:
-      - mlops-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 5s
-      retries: 12
-      timeout: 5s
+    - mlops-network
 
   # -------------------------
   # 4. Jenkins CI/CD Server
@@ -83,18 +64,19 @@ services:
   jenkins:
     build:
       context: .
-      dockerfile: jenkins/Dockerfile
-    container_name: jenkins-demo
+      dockerfile: jenkins/Dockerfile   # <— your custom Jenkins Dockerfile
     ports:
       - "8081:8080"
+    container_name: jenkins-demo
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock  # enable Docker inside Jenkins
       - mlflow_artifacts:/mlflow_artifacts
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
       - JENKINS_OPTS=--prefix=/jenkins
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+    restart: unless-stopped
     depends_on:
       - model-service
       - mlflow
@@ -102,11 +84,6 @@ services:
       - grafana
     networks:
       - mlops-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/login || exit 1"]
-      interval: 10s
-      retries: 10
-      timeout: 5s
 
   # -------------------------
   # 5. Prometheus for metrics
@@ -120,11 +97,6 @@ services:
       - "9090:9090"
     networks:
       - mlops-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9090/metrics || exit 1"]
-      interval: 5s
-      retries: 12
-      timeout: 5s
 
   # -------------------------
   # 6. Grafana for visualization
@@ -144,15 +116,7 @@ services:
       - prometheus
     networks:
       - mlops-network
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
-      interval: 5s
-      retries: 12
-      timeout: 5s
 
-# -------------------------
-# Docker network
-# -------------------------
 networks:
   mlops-network:
     driver: bridge

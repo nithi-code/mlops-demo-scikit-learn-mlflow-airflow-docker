@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        DOCKER_COMPOSE_CMD = "docker-compose"
+        DOCKER_COMPOSE_CMD = "docker compose"  // Use v2 style; ensure docker CLI + compose installed
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
         MLFLOW_TRACKING_URI = "http://mlflow:5000"
@@ -11,6 +11,7 @@ pipeline {
         PROCESSED_PATH = "${DATA_DIR}/processed/housing_processed.csv"
         PROMETHEUS_HOST = "prometheus"
         GRAFANA_HOST = "grafana"
+        MODEL_SERVICE_HOST = "model-service"
     }
     stages {
         stage('Checkout') {
@@ -57,18 +58,6 @@ pipeline {
             }
         }
 
-        stage('Wait for MLflow') {
-            steps {
-                echo "Waiting for MLflow Tracking Server..."
-                sh """
-                    until curl -s ${MLFLOW_TRACKING_URI}/api/2.0/mlflow/experiments/list >/dev/null; do
-                        echo "Waiting for MLflow..."
-                        sleep 5
-                    done
-                """
-            }
-        }
-
         stage('Train Model') {
             steps {
                 echo "Training the model..."
@@ -85,48 +74,68 @@ pipeline {
         // stage('Build & Deploy Services') {
         //     steps {
         //         echo "Building and deploying Docker services..."
-        //         sh "${DOCKER_COMPOSE_CMD} build"
-        //         sh "${DOCKER_COMPOSE_CMD} up -d"
+        //         sh """
+        //             ${DOCKER_COMPOSE_CMD} build
+        //             ${DOCKER_COMPOSE_CMD} up -d
+        //         """
         //     }
         // }
+
+        stage('Validate Services Health') {
+            steps {
+                echo "Waiting for Docker services to become healthy..."
+                sh """
+                    echo "Waiting for MLflow..."
+                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' mlflow-demo)" = "healthy" ]; do
+                        sleep 2
+                    done
+
+                    echo "Waiting for Model Service..."
+                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' model-service-demo)" = "healthy" ]; do
+                        sleep 2
+                    done
+
+                    echo "Waiting for Prometheus..."
+                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' prometheus-demo)" = "healthy" ]; do
+                        sleep 2
+                    done
+
+                    echo "Waiting for Grafana..."
+                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' grafana-demo)" = "healthy" ]; do
+                        sleep 2
+                    done
+                """
+            }
+        }
 
         stage('Test Model Prediction') {
             steps {
                 echo "Testing model prediction API..."
                 sh """
-                    # Create payload JSON file
                     cat > payload.json <<EOF
-        [
-        {
-            "feature_0": 0.496714,
-            "feature_1": -0.138264,
-            "feature_2": 0.647688,
-            "feature_3": 1.52303,
-            "feature_4": -0.234153,
-            "feature_5": -0.234137,
-            "feature_6": 1.57921,
-            "feature_7": 0.767435
-        }
-        ]
-        EOF
-
-                    # Call prediction API
-                    RESPONSE=\$(curl -s -X POST -H 'Content-Type: application/json' -d @payload.json http://localhost:8000/predict)
+                [
+                {
+                    "feature_0": 0.496714,
+                    "feature_1": -0.138264,
+                    "feature_2": 0.647688,
+                    "feature_3": 1.52303,
+                    "feature_4": -0.234153,
+                    "feature_5": -0.234137,
+                    "feature_6": 1.57921,
+                    "feature_7": 0.767435
+                }
+                ]
+                EOF
+                    RESPONSE=\$(curl -s -X POST -H 'Content-Type: application/json' -d @payload.json http://${MODEL_SERVICE_HOST}:8000/predict)
                     echo "Prediction response: \$RESPONSE"
                 """
             }
         }
 
-
         stage('Validate Monitoring') {
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 sh """
-                    # Wait for Prometheus
-                    until curl -s http://${PROMETHEUS_HOST}:9090/metrics >/dev/null; do
-                        echo "Waiting for Prometheus..."
-                        sleep 5
-                    done
                     PROM_RESPONSE=\$(curl -s http://${PROMETHEUS_HOST}:9090/metrics)
                     if ! echo "\$PROM_RESPONSE" | grep -q "predict_requests_total"; then
                         echo "Prometheus metrics missing 'predict_requests_total'!"
@@ -134,11 +143,6 @@ pipeline {
                     fi
                     echo "Prometheus metrics validation passed."
 
-                    # Wait for Grafana
-                    until curl -s http://${GRAFANA_HOST}:3000/api/dashboards/db/dashboard >/dev/null; do
-                        echo "Waiting for Grafana..."
-                        sleep 5
-                    done
                     GRAF_RESPONSE=\$(curl -s http://${GRAFANA_HOST}:3000/api/dashboards/db/dashboard)
                     if ! echo "\$GRAF_RESPONSE" | grep -q "dashboard"; then
                         echo "Grafana dashboard validation failed!"
