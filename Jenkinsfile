@@ -1,5 +1,9 @@
 pipeline {
     agent any
+    options {
+        // Wipe workspace before every build to ensure a clean start
+        wipeWorkspace()
+    }
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
@@ -15,9 +19,16 @@ pipeline {
         // -------------------------
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
-                    credentialsId: 'github-pat'
+                echo "Checking out Git repository..."
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [[$class: 'WipeWorkspace']],  // clean workspace before checkout
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
+                        credentialsId: 'github-pat'
+                    ]]
+                ])
             }
         }
 
@@ -121,14 +132,12 @@ pipeline {
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 script {
-                    // Prometheus check
                     def prometheusResponse = sh(script: "curl -s http://prometheus:9090/metrics", returnStdout: true).trim()
                     if (!prometheusResponse.contains("predict_requests_total")) {
                         error "Prometheus metrics missing 'predict_requests_total'!"
                     }
                     echo "Prometheus metrics validation passed."
 
-                    // Grafana dashboard check
                     def grafanaResponse = sh(script: "curl -s http://grafana:3000/api/dashboards/db/dashboard -u admin:admin", returnStdout: true).trim()
                     if (!grafanaResponse.contains("dashboard")) {
                         error "Grafana dashboard validation failed!"
