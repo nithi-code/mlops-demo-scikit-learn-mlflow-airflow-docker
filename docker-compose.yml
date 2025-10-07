@@ -95,6 +95,8 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    networks:
+      - mlops-network
 
   # -------------------------
   # 6. Grafana for visualization
@@ -112,6 +114,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
+    networks:
+      - mlops-network
 
 networks:
   mlops-network:

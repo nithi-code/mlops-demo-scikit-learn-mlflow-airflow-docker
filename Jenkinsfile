@@ -9,6 +9,8 @@ pipeline {
         VENV_PATH = "${WORKSPACE}/venv"
         PATH = "${VENV_PATH}/bin:${env.PATH}"
         PROCESSED_PATH = "${DATA_DIR}/processed/housing_processed.csv"
+        PROMETHEUS_HOST = "prometheus"
+        GRAFANA_HOST = "grafana"
     }
     stages {
         stage('Checkout') {
@@ -119,19 +121,31 @@ pipeline {
         stage('Validate Monitoring') {
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
-                script {
-                    def prometheusResponse = sh(script: "curl -s http://localhost:9090/metrics", returnStdout: true).trim()
-                    if (!prometheusResponse.contains("predict_requests_total")) {
-                        error "Prometheus metrics missing 'predict_requests_total'!"
-                    }
+                sh """
+                    # Wait for Prometheus
+                    until curl -s http://${PROMETHEUS_HOST}:9090/metrics >/dev/null; do
+                        echo "Waiting for Prometheus..."
+                        sleep 5
+                    done
+                    PROM_RESPONSE=\$(curl -s http://${PROMETHEUS_HOST}:9090/metrics)
+                    if ! echo "\$PROM_RESPONSE" | grep -q "predict_requests_total"; then
+                        echo "Prometheus metrics missing 'predict_requests_total'!"
+                        exit 1
+                    fi
                     echo "Prometheus metrics validation passed."
 
-                    def grafanaDashboardResponse = sh(script: "curl -s http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
-                    if (!grafanaDashboardResponse.contains("dashboard")) {
-                        error "Grafana dashboard validation failed!"
-                    }
+                    # Wait for Grafana
+                    until curl -s http://${GRAFANA_HOST}:3000/api/dashboards/db/dashboard >/dev/null; do
+                        echo "Waiting for Grafana..."
+                        sleep 5
+                    done
+                    GRAF_RESPONSE=\$(curl -s http://${GRAFANA_HOST}:3000/api/dashboards/db/dashboard)
+                    if ! echo "\$GRAF_RESPONSE" | grep -q "dashboard"; then
+                        echo "Grafana dashboard validation failed!"
+                        exit 1
+                    fi
                     echo "Grafana dashboard validation passed."
-                }
+                """
             }
         }
     }
