@@ -81,28 +81,16 @@ pipeline {
         //     }
         // }
 
-        stage('Validate Services Health') {
+        stage('Wait for Services') {
             steps {
                 echo "Waiting for Docker services to become healthy..."
                 sh """
-                    echo "Waiting for MLflow..."
-                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' mlflow-demo)" = "healthy" ]; do
-                        sleep 2
-                    done
-
-                    echo "Waiting for Model Service..."
-                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' model-service-demo)" = "healthy" ]; do
-                        sleep 2
-                    done
-
-                    echo "Waiting for Prometheus..."
-                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' prometheus-demo)" = "healthy" ]; do
-                        sleep 2
-                    done
-
-                    echo "Waiting for Grafana..."
-                    until [ "\$(docker inspect -f '{{.State.Health.Status}}' grafana-demo)" = "healthy" ]; do
-                        sleep 2
+                    SERVICES=(mlflow-demo model-service-demo prometheus-demo grafana-demo)
+                    for SERVICE in "\${SERVICES[@]}"; do
+                        echo "Waiting for \$SERVICE..."
+                        until [ "\$(docker inspect -f '{{.State.Health.Status}}' \$SERVICE 2>/dev/null)" = "healthy" ]; do
+                            sleep 2
+                        done
                     done
                 """
             }
