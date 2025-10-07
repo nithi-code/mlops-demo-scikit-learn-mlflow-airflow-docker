@@ -209,7 +209,7 @@ The project uses the **Boston Housing dataset** (or a synthetic version generate
 
   ## Stages:
   1. **Checkout code** - 
-  2. **Setup Python Environment**
+  2. **Setup Python Environment** - 
   3. **Prepare Data / DVC** - skips if no .dvc or remote configured. Prevents failures in Jenkins.
   4. **Wait for MLflowt** - ensures train.py can connect
   5. **Train model (via your train script)**
