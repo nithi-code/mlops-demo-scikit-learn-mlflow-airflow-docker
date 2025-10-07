@@ -44,12 +44,18 @@ services:
 
   jenkins:
     build:
-      context: ./jenkins
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: jenkins/Dockerfile   # 👈 your new Jenkins Dockerfile path
     ports:
       - "8081:8080"
     volumes:
       - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock  # 👈 enables Docker-in-Docker
+      - ./data:/app/data                           # optional, for local data access
+      - ./artifacts:/app/artifacts                 # optional, for MLflow/model outputs
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    privileged: true  # 👈 helps ensure Docker works properly inside Jenkins
     depends_on:
       - mlflow
       - model-service

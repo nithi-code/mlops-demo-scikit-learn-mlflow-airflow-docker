@@ -1,13 +1,13 @@
-# Base image
-FROM ubuntu:22.04
+# Base image: official Jenkins LTS
+FROM jenkins/jenkins:lts
 
-# Switch to root for installing packages
+# Switch to root to install dependencies
 USER root
 
-# Set non-interactive mode for apt
+# Set non-interactive mode
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install required system packages
+# Install system packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         python3 \
@@ -18,7 +18,7 @@ RUN apt-get update && \
         docker.io \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a virtual environment
+# Create a Python virtual environment
 RUN python3 -m venv /opt/venv
 
 # Activate venv and upgrade pip
@@ -30,17 +30,18 @@ RUN /opt/venv/bin/pip install dvc[all] mlflow requests
 # Add venv to PATH
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create Jenkins home directory
-RUN mkdir -p /var/jenkins_home
-VOLUME /var/jenkins_home
+# Add Jenkins user to docker group
+RUN usermod -aG docker jenkins
 
-# Switch to Jenkins user
-RUN useradd -m -d /var/jenkins_home jenkins
+# Ensure Jenkins home has correct permissions
+RUN mkdir -p /var/jenkins_home && chown -R jenkins:jenkins /var/jenkins_home
+
+# Switch back to Jenkins user
 USER jenkins
 WORKDIR /var/jenkins_home
 
-# Expose Jenkins port
+# Expose Jenkins default port
 EXPOSE 8080
 
-# Start Jenkins (the official Jenkins image CMD can be adapted)
-CMD ["bash"]
+# Use official Jenkins startup script
+CMD ["/sbin/tini", "--", "/usr/local/bin/jenkins.sh"]
