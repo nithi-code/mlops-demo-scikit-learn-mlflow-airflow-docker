@@ -6,8 +6,8 @@ pipeline {
         ARTIFACTS_DIR = "artifacts"
         MODEL_SERVICE_URL = "http://localhost:8000/predict"
         MLFLOW_TRACKING_URI = "http://localhost:5000"
-        VENV_PATH = "/opt/venv/bin"
-        PATH = "${VENV_PATH}:${env.PATH}"
+        VENV_PATH = "${WORKSPACE}/venv"
+        PATH = "${VENV_PATH}/bin:${env.PATH}"
     }
     stages {
         stage('Checkout') {
@@ -20,24 +20,27 @@ pipeline {
 
         stage('Setup Environment') {
             steps {
-                echo "Installing Python dependencies..."
-                sh "${VENV_PATH}/pip install --upgrade pip"
-                sh "${VENV_PATH}/pip install -r requirements.txt"
-                sh "${VENV_PATH}/pip install dvc[all] mlflow requests"
+                echo "Creating virtual environment and installing Python dependencies..."
+                sh """
+                    python3 -m venv ${VENV_PATH}
+                    ${VENV_PATH}/bin/pip install --upgrade pip
+                    ${VENV_PATH}/bin/pip install -r requirements.txt
+                    ${VENV_PATH}/bin/pip install 'dvc[all]' mlflow requests
+                """
             }
         }
 
         stage('DVC Repro') {
             steps {
                 echo "Reproducing DVC pipeline..."
-                sh 'dvc repro || true'
+                sh "${VENV_PATH}/bin/dvc repro || true"
             }
         }
 
         stage('Train Model') {
             steps {
                 echo "Training the model..."
-                sh "${VENV_PATH}/python src/train.py"
+                sh "${VENV_PATH}/bin/python src/train.py"
             }
         }
 
@@ -69,9 +72,8 @@ pipeline {
                     def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}", returnStdout: true).trim()
                     echo "Prediction response: ${response}"
 
-                    // Optional: log prediction to MLflow
-                    sh """
-                        ${VENV_PATH}/python - <<EOF
+                    // Log prediction to MLflow
+                    sh """${VENV_PATH}/bin/python - <<EOF
 import mlflow
 import json
 mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")

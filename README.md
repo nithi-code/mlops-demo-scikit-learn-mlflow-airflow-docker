@@ -80,7 +80,7 @@ The project uses the **Boston Housing dataset** (or a synthetic version generate
 | Airflow    | `http://localhost:8080` |
 | Prometheus | `http://localhost:9090` |
 | Grafana    | `http://localhost:3000` |
-| Jenkins    | `http://localhost:8081` |
+| Jenkins    | `http://localhost:8081/jenkins` |
 
 * **Model Service:** Flask app serving `/predict` endpoint with Swagger UI and Prometheus metrics.
 * **MLflow:** Model tracking server.

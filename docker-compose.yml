@@ -1,6 +1,7 @@
-version: '3.8'
-
 services:
+  # -------------------------
+  # 1. Apache Airflow
+  # -------------------------
   airflow:
     image: apache/airflow:2.6.3
     environment:
@@ -19,6 +20,9 @@ services:
       airflow webserver
       "
 
+  # -------------------------
+  # 2. MLflow Tracking Server
+  # -------------------------
   mlflow:
     build:
       context: .
@@ -30,6 +34,9 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
 
+  # -------------------------
+  # 3. Model Service API
+  # -------------------------
   model-service:
     build:
       context: .
@@ -42,24 +49,31 @@ services:
     depends_on:
       - mlflow
 
+  # -------------------------
+  # 4. Jenkins CI/CD Server
+  # -------------------------
   jenkins:
     build:
       context: .
-      dockerfile: jenkins/Dockerfile   # 👈 your new Jenkins Dockerfile path
+      dockerfile: jenkins/Dockerfile   # <— your custom Jenkins Dockerfile
     ports:
       - "8081:8080"
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock  # 👈 enables Docker-in-Docker
-      - ./data:/app/data                           # optional, for local data access
-      - ./artifacts:/app/artifacts                 # optional, for MLflow/model outputs
+      - /var/run/docker.sock:/var/run/docker.sock  # enable Docker inside Jenkins
     environment:
-      - DOCKER_HOST=unix:///var/run/docker.sock
-    privileged: true  # 👈 helps ensure Docker works properly inside Jenkins
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - JENKINS_OPTS=--prefix=/jenkins
+    restart: unless-stopped
     depends_on:
-      - mlflow
       - model-service
+      - mlflow
+      - prometheus
+      - grafana
 
+  # -------------------------
+  # 5. Prometheus for metrics
+  # -------------------------
   prometheus:
     image: prom/prometheus:latest
     volumes:
@@ -67,6 +81,9 @@ services:
     ports:
       - "9090:9090"
 
+  # -------------------------
+  # 6. Grafana for visualization
+  # -------------------------
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -74,7 +91,15 @@ services:
     volumes:
       - grafana-storage:/var/lib/grafana
       - ./grafana/dashboard.json:/tmp/dashboard.json
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
 
+# -------------------------
+# Volumes for persistence
+# -------------------------
 volumes:
   mlflow_artifacts:
   jenkins_home:
