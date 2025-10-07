@@ -117,7 +117,7 @@ pipeline {
                     RESPONSE=\$(curl -s -X POST -H 'Content-Type: application/json' -d @payload.json http://${MODEL_SERVICE_HOST}:8000/predict)
                     echo "Prediction response: \$RESPONSE"
                 """
-            }
+            } 
         }
 
         stage('Validate Monitoring') {
