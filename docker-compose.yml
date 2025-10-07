@@ -8,6 +8,7 @@ services:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__FERNET_KEY=ukFVBNBcN97a4WjO-ZEZVd51FVuXQlU42y7EYYqr-vc=
+    container_name: airflow-demo
     volumes:
       - ./airflow_dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
@@ -27,17 +28,15 @@ services:
     build:
       context: .
       dockerfile: mlflow_server/Dockerfile
+    container_name: mlflow-demo
     volumes:
       - mlflow_artifacts:/mlflow_artifacts
     ports:
       - "5000:5000"
+    networks:
+      - mlops-network
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
-    command: >
-      bash -c "
-      chown -R 1000:1000 /mlflow_artifacts && \
-      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow_artifacts
-      "
 
   # -------------------------
   # 3. Model Service API
@@ -46,6 +45,7 @@ services:
     build:
       context: .
       dockerfile: model_service/Dockerfile
+    container_name: model-service-demo
     ports:
       - "8000:8000"
     volumes:
@@ -53,6 +53,10 @@ services:
       - ./artifacts:/app/artifacts
     depends_on:
       - mlflow
+    environment:
+    - MLFLOW_TRACKING_URI=http://mlflow:5000
+    networks:
+    - mlops-network
 
   # -------------------------
   # 4. Jenkins CI/CD Server
@@ -63,24 +67,30 @@ services:
       dockerfile: jenkins/Dockerfile   # <— your custom Jenkins Dockerfile
     ports:
       - "8081:8080"
+    container_name: jenkins-demo
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock  # enable Docker inside Jenkins
+      - mlflow_artifacts:/mlflow_artifacts
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
       - JENKINS_OPTS=--prefix=/jenkins
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
     restart: unless-stopped
     depends_on:
       - model-service
       - mlflow
       - prometheus
       - grafana
+    networks:
+      - mlops-network
 
   # -------------------------
   # 5. Prometheus for metrics
   # -------------------------
   prometheus:
     image: prom/prometheus:latest
+    container_name: prometheus-demo
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
@@ -91,6 +101,7 @@ services:
   # -------------------------
   grafana:
     image: grafana/grafana:latest
+    container_name: grafana-demo
     ports:
       - "3000:3000"
     volumes:
@@ -101,6 +112,10 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
+
+networks:
+  mlops-network:
+    driver: bridge
 
 # -------------------------
 # Volumes for persistence
