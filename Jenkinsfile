@@ -71,9 +71,9 @@ pipeline {
             steps {
                 echo "Training the model..."
                 sh """
-                    mkdir -p ${MLFLOW_ARTIFACTS_DIR}
+                    mkdir -p ${WORKSPACE}/mlflow_artifacts
                     export PROCESSED_PATH=${PROCESSED_PATH}
-                    export MLFLOW_ARTIFACTS_DIR=${MLFLOW_ARTIFACTS_DIR}
+                    export MLFLOW_ARTIFACTS_DIR=${WORKSPACE}/mlflow_artifacts
                     export MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
                     ${VENV_PATH}/bin/python src/train.py
                 """

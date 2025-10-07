@@ -12,11 +12,11 @@ from datetime import datetime
 # Paths
 # -----------------------
 PROCESSED_PATH = os.environ.get("PROCESSED_PATH", "data/processed/housing_processed.csv")
-ARTIFACTS_DIR = os.environ.get("MLFLOW_ARTIFACTS_DIR", "mlflow_artifacts")
-MODEL_PATH = os.path.join(ARTIFACTS_DIR, "model.joblib")
-METRICS_PATH = os.path.join(ARTIFACTS_DIR, "metrics.json")
+MLFLOW_ARTIFACTS_DIR = os.environ.get("MLFLOW_ARTIFACTS_DIR", "mlflow_artifacts")
+os.makedirs(MLFLOW_ARTIFACTS_DIR, exist_ok=True)
 
-os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+MODEL_PATH = os.path.join(MLFLOW_ARTIFACTS_DIR, "model.joblib")
+METRICS_PATH = os.path.join(MLFLOW_ARTIFACTS_DIR, "metrics.json")
 
 # -----------------------
 # MLflow setup
