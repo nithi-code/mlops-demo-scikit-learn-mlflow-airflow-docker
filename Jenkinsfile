@@ -1,18 +1,16 @@
 pipeline {
     agent any
-
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
-        MODEL_SERVICE_URL = "http://localhost:8000/predict"
         MLFLOW_TRACKING_URI = "http://mlflow:5000"
+        MLFLOW_ARTIFACTS_DIR = "${WORKSPACE}/mlflow_artifacts"
         VENV_PATH = "${WORKSPACE}/venv"
         PATH = "${VENV_PATH}/bin:${env.PATH}"
+        PROCESSED_PATH = "${DATA_DIR}/processed/housing_processed.csv"
     }
-
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -33,25 +31,26 @@ pipeline {
             }
         }
 
-        stage('Preprocess Data') {
-            steps {
-                script {
-                    if (!fileExists("${DATA_DIR}/processed/housing_processed.csv")) {
-                        echo "Processed data not found. Running preprocessing..."
-                        sh "${VENV_PATH}/bin/python src/preprocess.py"
-                    } else {
-                        echo "Processed data exists. Skipping preprocessing."
-                    }
-                }
-            }
-        }
-
         stage('DVC Pull') {
             steps {
                 echo "Pulling data from DVC..."
                 sh """
                     mkdir -p ${DATA_DIR}/processed ${ARTIFACTS_DIR}
-                    ${VENV_PATH}/bin/dvc pull || echo 'DVC pull failed or skipped'
+                    ${VENV_PATH}/bin/dvc pull || true
+                """
+            }
+        }
+
+        stage('Preprocess Data') {
+            steps {
+                echo "Running preprocessing if processed data is missing..."
+                sh """
+                    if [ ! -f "${PROCESSED_PATH}" ]; then
+                        echo "Processed data not found. Running preprocess.py..."
+                        ${VENV_PATH}/bin/python src/preprocess.py
+                    else
+                        echo "Processed data exists. Skipping preprocessing."
+                    fi
                 """
             }
         }
@@ -71,7 +70,13 @@ pipeline {
         stage('Train Model') {
             steps {
                 echo "Training the model..."
-                sh "${VENV_PATH}/bin/python src/train.py"
+                sh """
+                    mkdir -p ${MLFLOW_ARTIFACTS_DIR}
+                    export PROCESSED_PATH=${PROCESSED_PATH}
+                    export MLFLOW_ARTIFACTS_DIR=${MLFLOW_ARTIFACTS_DIR}
+                    export MLFLOW_TRACKING_URI=${MLFLOW_TRACKING_URI}
+                    ${VENV_PATH}/bin/python src/train.py
+                """
             }
         }
 
@@ -87,25 +92,21 @@ pipeline {
             steps {
                 echo "Testing model prediction API..."
                 script {
-                    def payload = [[
-                        "feature_0": 0.496714, "feature_1": -0.138264,
-                        "feature_2": 0.647688, "feature_3": 1.52303,
-                        "feature_4": -0.234153, "feature_5": -0.234137,
-                        "feature_6": 1.57921, "feature_7": 0.767435
-                    ]]
+                    def payload = [
+                        [
+                            "feature_0": 0.496714,
+                            "feature_1": -0.138264,
+                            "feature_2": 0.647688,
+                            "feature_3": 1.52303,
+                            "feature_4": -0.234153,
+                            "feature_5": -0.234137,
+                            "feature_6": 1.57921,
+                            "feature_7": 0.767435
+                        ]
+                    ]
                     def payloadJson = groovy.json.JsonOutput.toJson(payload)
-                    def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}", returnStdout: true).trim()
+                    def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' http://localhost:8000/predict", returnStdout: true).trim()
                     echo "Prediction response: ${response}"
-
-                    // Log prediction to MLflow
-                    sh """${VENV_PATH}/bin/python - <<EOF
-import mlflow, json
-mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")
-with mlflow.start_run(run_name="test_prediction"):
-    mlflow.log_param("input_sample", '${payloadJson}')
-    mlflow.log_metric("predicted_value", json.loads('${response}')['predictions'][0])
-EOF
-                    """
                 }
             }
         }
@@ -131,7 +132,11 @@ EOF
     }
 
     post {
-        success { echo "Pipeline completed successfully!" }
-        failure { echo "Pipeline failed. Check logs for details." }
+        success {
+            echo "Pipeline completed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check logs for details."
+        }
     }
 }

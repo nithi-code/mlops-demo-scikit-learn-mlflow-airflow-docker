@@ -33,6 +33,11 @@ services:
       - "5000:5000"
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+    command: >
+      bash -c "
+      chown -R 1000:1000 /mlflow_artifacts && \
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root /mlflow_artifacts
+      "
 
   # -------------------------
   # 3. Model Service API
