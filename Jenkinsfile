@@ -1,39 +1,27 @@
 pipeline {
     agent any
-    options {
-        // Wipe workspace before every build to ensure a clean start
-        wipeWorkspace()
-    }
+
     environment {
         DOCKER_COMPOSE_CMD = "docker-compose"
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
-        MODEL_SERVICE_URL = "http://model-service:8000/predict"
-        MLFLOW_TRACKING_URI = "http://mlflow:5000"
+        MODEL_SERVICE_URL = "http://localhost:8000/predict"
+        MLFLOW_TRACKING_URI = "http://localhost:5000"
         VENV_PATH = "${WORKSPACE}/venv"
         PATH = "${VENV_PATH}/bin:${env.PATH}"
     }
 
     stages {
 
-        // -------------------------
         stage('Checkout') {
             steps {
-                echo "Checking out Git repository..."
-                checkout([$class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    doGenerateSubmoduleConfigurations: false,
-                    extensions: [[$class: 'WipeWorkspace']],  // clean workspace before checkout
-                    userRemoteConfigs: [[
-                        url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
-                        credentialsId: 'github-pat'
-                    ]]
-                ])
+                git branch: 'main',
+                    url: 'https://github.com/nithi-code/mlops-demo-scikit-learn-mlflow-airflow-docker.git',
+                    credentialsId: 'github-pat'
             }
         }
 
-        // -------------------------
-        stage('Setup Python Environment') {
+        stage('Setup Environment') {
             steps {
                 echo "Creating virtual environment and installing dependencies..."
                 sh """
@@ -45,37 +33,29 @@ pipeline {
             }
         }
 
-        // -------------------------
-        stage('Prepare Data / DVC') {
+        stage('Preprocess Data') {
             steps {
-                echo "Preparing data and DVC..."
+                script {
+                    if (!fileExists("${DATA_DIR}/processed/housing_processed.csv")) {
+                        echo "Processed data not found. Running preprocessing..."
+                        sh "${VENV_PATH}/bin/python src/preprocess.py"
+                    } else {
+                        echo "Processed data exists. Skipping preprocessing."
+                    }
+                }
+            }
+        }
+
+        stage('DVC Pull') {
+            steps {
+                echo "Pulling data from DVC..."
                 sh """
                     mkdir -p ${DATA_DIR}/processed ${ARTIFACTS_DIR}
-
-                    # Only run DVC if repository exists
-                    if [ -f "dvc.yaml" ] || [ -d ".dvc" ]; then
-                        echo "DVC repo found. Attempting to pull data..."
-                        set +e
-                        ${VENV_PATH}/bin/dvc pull
-                        if [ $? -ne 0 ]; then
-                            echo "DVC pull failed or remote not configured. Using existing data."
-                        fi
-                        set -e
-                    else
-                        echo "No DVC repo found. Skipping DVC pull."
-                    fi
-
-                    # Verify processed CSV
-                    if [ ! -f "${DATA_DIR}/processed/housing_processed.csv" ]; then
-                        echo "[WARNING] Processed data not found. Training may fail!"
-                    else
-                        echo "Processed data is available."
-                    fi
+                    ${VENV_PATH}/bin/dvc pull || echo 'DVC pull failed or skipped'
                 """
             }
         }
 
-        // -------------------------
         stage('Wait for MLflow') {
             steps {
                 echo "Waiting for MLflow Tracking Server..."
@@ -88,7 +68,6 @@ pipeline {
             }
         }
 
-        // -------------------------
         stage('Train Model') {
             steps {
                 echo "Training the model..."
@@ -96,8 +75,7 @@ pipeline {
             }
         }
 
-        // -------------------------
-        stage('Build & Deploy Docker Services') {
+        stage('Build & Deploy Services') {
             steps {
                 echo "Building and deploying Docker services..."
                 sh "${DOCKER_COMPOSE_CMD} build"
@@ -105,56 +83,55 @@ pipeline {
             }
         }
 
-        // -------------------------
-        stage('Test Model Prediction API') {
+        stage('Test Model Prediction') {
             steps {
                 echo "Testing model prediction API..."
                 script {
                     def payload = [[
-                        "feature_0": 0.496714,
-                        "feature_1": -0.138264,
-                        "feature_2": 0.647688,
-                        "feature_3": 1.52303,
-                        "feature_4": -0.234153,
-                        "feature_5": -0.234137,
-                        "feature_6": 1.57921,
-                        "feature_7": 0.767435
+                        "feature_0": 0.496714, "feature_1": -0.138264,
+                        "feature_2": 0.647688, "feature_3": 1.52303,
+                        "feature_4": -0.234153, "feature_5": -0.234137,
+                        "feature_6": 1.57921, "feature_7": 0.767435
                     ]]
                     def payloadJson = groovy.json.JsonOutput.toJson(payload)
                     def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' ${MODEL_SERVICE_URL}", returnStdout: true).trim()
                     echo "Prediction response: ${response}"
+
+                    // Log prediction to MLflow
+                    sh """${VENV_PATH}/bin/python - <<EOF
+import mlflow, json
+mlflow.set_tracking_uri("${MLFLOW_TRACKING_URI}")
+with mlflow.start_run(run_name="test_prediction"):
+    mlflow.log_param("input_sample", '${payloadJson}')
+    mlflow.log_metric("predicted_value", json.loads('${response}')['predictions'][0])
+EOF
+                    """
                 }
             }
         }
 
-        // -------------------------
         stage('Validate Monitoring') {
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 script {
-                    def prometheusResponse = sh(script: "curl -s http://prometheus:9090/metrics", returnStdout: true).trim()
+                    def prometheusResponse = sh(script: "curl -s http://localhost:9090/metrics", returnStdout: true).trim()
                     if (!prometheusResponse.contains("predict_requests_total")) {
                         error "Prometheus metrics missing 'predict_requests_total'!"
                     }
                     echo "Prometheus metrics validation passed."
 
-                    def grafanaResponse = sh(script: "curl -s http://grafana:3000/api/dashboards/db/dashboard -u admin:admin", returnStdout: true).trim()
-                    if (!grafanaResponse.contains("dashboard")) {
+                    def grafanaDashboardResponse = sh(script: "curl -s http://localhost:3000/api/dashboards/db/dashboard", returnStdout: true).trim()
+                    if (!grafanaDashboardResponse.contains("dashboard")) {
                         error "Grafana dashboard validation failed!"
                     }
                     echo "Grafana dashboard validation passed."
                 }
             }
         }
-
     }
 
     post {
-        success {
-            echo "Pipeline completed successfully!"
-        }
-        failure {
-            echo "Pipeline failed. Check logs for details."
-        }
+        success { echo "Pipeline completed successfully!" }
+        failure { echo "Pipeline failed. Check logs for details." }
     }
 }
