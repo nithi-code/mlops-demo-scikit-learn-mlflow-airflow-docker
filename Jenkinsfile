@@ -124,14 +124,14 @@ pipeline {
             steps {
                 echo "Validating Prometheus metrics and Grafana dashboards..."
                 sh """
-                    PROM_RESPONSE=\$(curl -s http://${PROMETHEUS_HOST}:9090/metrics)
+                    PROM_RESPONSE=\$(curl -s http://localhost:9090/metrics)
                     if ! echo "\$PROM_RESPONSE" | grep -q "predict_requests_total"; then
                         echo "Prometheus metrics missing 'predict_requests_total'!"
                         exit 1
                     fi
                     echo "Prometheus metrics validation passed."
 
-                    GRAF_RESPONSE=\$(curl -s http://${GRAFANA_HOST}:3000/api/dashboards/db/dashboard)
+                    GRAF_RESPONSE=\$(curl -s http://localhost:3000/api/dashboards/db/dashboard)
                     if ! echo "\$GRAF_RESPONSE" | grep -q "dashboard"; then
                         echo "Grafana dashboard validation failed!"
                         exit 1
