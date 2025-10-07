@@ -81,20 +81,20 @@ pipeline {
         //     }
         // }
 
-        stage('Wait for Services') {
-            steps {
-                echo "Waiting for Docker services to become healthy..."
-                sh """
-                    SERVICES=(mlflow-demo model-service-demo prometheus-demo grafana-demo)
-                    for SERVICE in "\${SERVICES[@]}"; do
-                        echo "Waiting for \$SERVICE..."
-                        until [ "\$(docker inspect -f '{{.State.Health.Status}}' \$SERVICE 2>/dev/null)" = "healthy" ]; do
-                            sleep 2
-                        done
-                    done
-                """
-            }
-        }
+        // stage('Wait for Services') {
+        //     steps {
+        //         echo "Waiting for Docker services to become healthy..."
+        //         sh """
+        //             SERVICES=(mlflow-demo model-service-demo prometheus-demo grafana-demo)
+        //             for SERVICE in "\${SERVICES[@]}"; do
+        //                 echo "Waiting for \$SERVICE..."
+        //                 until [ "\$(docker inspect -f '{{.State.Health.Status}}' \$SERVICE 2>/dev/null)" = "healthy" ]; do
+        //                     sleep 2
+        //                 done
+        //             done
+        //         """
+        //     }
+        // }
 
         stage('Test Model Prediction') {
             steps {
