@@ -80,13 +80,13 @@ pipeline {
             }
         }
 
-        stage('Build & Deploy Services') {
-            steps {
-                echo "Building and deploying Docker services..."
-                sh "${DOCKER_COMPOSE_CMD} build"
-                sh "${DOCKER_COMPOSE_CMD} up -d"
-            }
-        }
+        // stage('Build & Deploy Services') {
+        //     steps {
+        //         echo "Building and deploying Docker services..."
+        //         sh "${DOCKER_COMPOSE_CMD} build"
+        //         sh "${DOCKER_COMPOSE_CMD} up -d"
+        //     }
+        // }
 
         stage('Test Model Prediction') {
             steps {
