@@ -91,25 +91,30 @@ pipeline {
         stage('Test Model Prediction') {
             steps {
                 echo "Testing model prediction API..."
-                script {
-                    def payload = [
-                        {
-                            "feature_0": 0.496714,
-                            "feature_1": -0.138264,
-                            "feature_2": 0.647688,
-                            "feature_3": 1.52303,
-                            "feature_4": -0.234153,
-                            "feature_5": -0.234137,
-                            "feature_6": 1.57921,
-                            "feature_7": 0.767435
-                        }
-                    ]
-                    def payloadJson = groovy.json.JsonOutput.toJson(payload)
-                    def response = sh(script: "curl -s -X POST -H 'Content-Type: application/json' -d '${payloadJson}' http://localhost:8000/predict", returnStdout: true).trim()
-                    echo "Prediction response: ${response}"
-                }
+                sh """
+                    # Create payload JSON file
+                    cat > payload.json <<EOF
+        [
+        {
+            "feature_0": 0.496714,
+            "feature_1": -0.138264,
+            "feature_2": 0.647688,
+            "feature_3": 1.52303,
+            "feature_4": -0.234153,
+            "feature_5": -0.234137,
+            "feature_6": 1.57921,
+            "feature_7": 0.767435
+        }
+        ]
+        EOF
+
+                    # Call prediction API
+                    RESPONSE=\$(curl -s -X POST -H 'Content-Type: application/json' -d @payload.json http://localhost:8000/predict)
+                    echo "Prediction response: \$RESPONSE"
+                """
             }
         }
+
 
         stage('Validate Monitoring') {
             steps {
