@@ -6,7 +6,7 @@ pipeline {
         DATA_DIR = "data"
         ARTIFACTS_DIR = "artifacts"
         MODEL_SERVICE_URL = "http://localhost:8000/predict"
-        MLFLOW_TRACKING_URI = "http://localhost:5000"
+        MLFLOW_TRACKING_URI = "http://mlflow:5000"
         VENV_PATH = "${WORKSPACE}/venv"
         PATH = "${VENV_PATH}/bin:${env.PATH}"
     }
