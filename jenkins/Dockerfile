@@ -24,7 +24,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Allow Jenkins user to use Docker safely
 # Replace 999 with your host Docker group GID (`ls -l /var/run/docker.sock`)
-ARG DOCKER_GID=999
+ARG DOCKER_GID=990
 RUN groupadd -g $DOCKER_GID docker || true && \
     usermod -aG docker jenkins && \
     mkdir -p /var/jenkins_home && chown -R jenkins:jenkins /var/jenkins_home
