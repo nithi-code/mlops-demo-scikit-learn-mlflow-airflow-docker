@@ -107,7 +107,7 @@ services:
     networks:
       - mlops-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://jenkins-demo:8080/jenkins/login || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://jenkins-demo:8080/login || exit 1"]
       interval: 10s
       retries: 10
       timeout: 5s
