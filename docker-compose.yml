@@ -87,6 +87,8 @@ services:
     build:
       context: .
       dockerfile: jenkins/Dockerfile
+      args:
+        DOCKER_GID: 990
     container_name: jenkins-demo
     ports:
       - "8090:8080"
@@ -96,7 +98,6 @@ services:
       - mlflow_artifacts:/mlflow_artifacts
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
-      - JENKINS_OPTS=--prefix=/jenkins
       - MLFLOW_TRACKING_URI=http://mlflow-demo:5000
     depends_on:
       - model-service
